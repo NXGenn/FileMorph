@@ -1,33 +1,65 @@
 import React from 'react';
-import { ImageFormat } from '../types';
+import { ConversionType } from '../types/conversion';
 
 interface FormatSelectorProps {
-  value: ImageFormat;
-  onChange: (format: ImageFormat) => void;
+  conversionType: ConversionType;
+  sourceFormat: string;
+  targetFormat: string;
+  onSourceFormatChange: (format: string) => void;
+  onTargetFormatChange: (format: string) => void;
 }
 
 export const FormatSelector: React.FC<FormatSelectorProps> = ({
-  value,
-  onChange,
+  conversionType,
+  sourceFormat,
+  targetFormat,
+  onSourceFormatChange,
+  onTargetFormatChange,
 }) => {
-  const formats: { value: ImageFormat; label: string }[] = [
-    { value: 'image/jpeg', label: 'JPEG' },
-    { value: 'image/png', label: 'PNG' },
-    { value: 'image/gif', label: 'GIF' },
-    { value: 'image/webp', label: 'WEBP' },
-  ];
+  const getFormats = (type: ConversionType) => {
+    switch (type) {
+      case 'document':
+        return ['pdf', 'docx', 'xlsx', 'pptx', 'epub'];
+      case 'video':
+        return ['mp4', 'avi', 'mkv', 'mov'];
+      case 'audio':
+        return ['mp3', 'wav', 'aac', 'flac'];
+      case 'text':
+        return ['json', 'xml', 'yaml', 'txt'];
+      case 'image':
+        return ['jpeg', 'png', 'gif', 'webp'];
+      default:
+        return [];
+    }
+  };
+
+  const formats = getFormats(conversionType);
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as ImageFormat)}
-      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-    >
-      {formats.map((format) => (
-        <option key={format.value} value={format.value}>
-          {format.label}
-        </option>
-      ))}
-    </select>
+    <div className="flex items-center space-x-4">
+      <select
+        value={sourceFormat}
+        onChange={(e) => onSourceFormatChange(e.target.value)}
+        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+      >
+        {formats.map((format) => (
+          <option key={format} value={format}>
+            {format.toUpperCase()}
+          </option>
+        ))}
+      </select>
+      <span className="text-gray-500">to</span>
+      <select
+        value={targetFormat}
+        onChange={(e) => onTargetFormatChange(e.target.value)}
+        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+      >
+        {formats.map((format) => (
+          <option key={format} value={format}>
+            {format.toUpperCase()}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 };
