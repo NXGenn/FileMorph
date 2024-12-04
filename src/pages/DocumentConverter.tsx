@@ -60,60 +60,60 @@ export const DocumentConverter: React.FC = () => {
   };
 
   return (
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Document Converter</h1>
-          <p className="mt-2 text-gray-600">
-            Convert between PDF, Word, Excel, and other document formats
-          </p>
-        </div>
-
-        <div className="space-y-6">
-          <DropZone
-              onFilesDrop={handleFilesDrop}
-              acceptedFileTypes=".pdf,.docx,.xlsx,.pptx,.epub"
-              maxFileSize={100 * 1024 * 1024} // 100MB
-              maxFiles={1}
-          />
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h2 className="text-lg font-semibold mb-4">Conversion Settings</h2>
-            <FormatSelector
-                conversionType="document"
-                sourceFormat={sourceFormat}
-                targetFormat={targetFormat}
-                onSourceFormatChange={(format) => setSourceFormat(format as DocumentFormat)}
-                onTargetFormatChange={(format) => setTargetFormat(format as DocumentFormat)}
-            />
-          </div>
-
-          {files.length > 0 && (
-              <div className="flex justify-center">
-                <Button
-                    onClick={handleConvert}
-                    isLoading={status === 'loading'}
-                    className="w-full max-w-md"
-                >
-                  <FileType className="w-4 h-4 mr-2" />
-                  Convert Document
-                </Button>
-              </div>
-          )}
-
-          {error && (
-              <div className="rounded-md bg-red-50 p-4">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-          )}
-
-          {status === 'success' && (
-              <div className="rounded-md bg-green-50 p-4">
-                <p className="text-sm text-green-700">
-                  Conversion completed successfully!
-                </p>
-              </div>
-          )}
-        </div>
+    <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Document Converter</h1>
+        <p className="mt-2 text-gray-600">
+          Convert between PDF, Word, Excel, and other document formats
+        </p>
       </div>
+
+      <div className="space-y-6">
+        <DropZone 
+          onFilesDrop={handleFilesDrop}
+          acceptedFileTypes=".pdf,.docx,.xlsx,.pptx,.epub"
+          maxFileSize={100 * 1024 * 1024} // 100MB
+          maxFiles={1}
+        />
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h2 className="text-lg font-semibold mb-4">Conversion Settings</h2>
+          <FormatSelector
+            conversionType="document"
+            sourceFormat={sourceFormat}
+            targetFormat={targetFormat}
+            onSourceFormatChange={(format) => setSourceFormat(format as DocumentFormat)}
+            onTargetFormatChange={(format) => setTargetFormat(format as DocumentFormat)}
+          />
+        </div>
+
+        {files.length > 0 && (
+          <div className="flex justify-center">
+            <Button
+              onClick={handleConvert}
+              isLoading={status === 'loading'}
+              className="w-full max-w-md"
+            >
+              <FileType className="w-4 h-4 mr-2" />
+              Convert Document
+            </Button>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-md bg-red-50 p-4">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        {status === 'success' && (
+          <div className="rounded-md bg-green-50 p-4">
+            <p className="text-sm text-green-700">
+              Conversion completed successfully!
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
