@@ -7,6 +7,7 @@ import { convertDocxToPdf, convertPdfToDocx, convertExcelToPdf, convertPdfToExce
 import { DocumentFormat } from '../types/conversion';
 import { FileWithPreview } from '../types';
 import { saveAs } from 'file-saver';
+import { FILE_TYPES } from '../utils/file-types';
 
 export const DocumentConverter: React.FC = () => {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
@@ -18,6 +19,10 @@ export const DocumentConverter: React.FC = () => {
   const handleFilesDrop = useCallback((newFiles: FileWithPreview[]) => {
     setFiles(newFiles);
     setError(null);
+  }, []);
+
+  const handleError = useCallback((errors: string[]) => {
+    setError(errors.join('\n'));
   }, []);
 
   const handleConvert = async () => {
@@ -71,9 +76,10 @@ export const DocumentConverter: React.FC = () => {
       <div className="space-y-6">
         <DropZone 
           onFilesDrop={handleFilesDrop}
-          acceptedFileTypes=".pdf,.docx,.xlsx,.pptx,.epub"
-          maxFileSize={100 * 1024 * 1024} // 100MB
+          acceptedFileTypes={FILE_TYPES.document.extensions.join(',')}
+          maxFileSize={FILE_TYPES.document.maxSize}
           maxFiles={1}
+          onError={handleError}
         />
 
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">

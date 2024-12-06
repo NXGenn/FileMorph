@@ -1,112 +1,184 @@
 import mammoth from 'mammoth';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as XLSX from 'xlsx';
-import * as pdfjsLib from 'pdfjs-dist';
+import { saveAs } from 'file-saver';
 
-// Initialize PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
 
 export async function convertDocxToPdf(file: File): Promise<Blob> {
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.convertToHtml({ arrayBuffer });
-  const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage();
-  
-  // Add the HTML content to PDF
-  const { width, height } = page.getSize();
-  page.drawText(result.value, {
-    x: 50,
-    y: height - 50,
-    size: 12,
-    maxWidth: width - 100,
-  });
-  
-  const pdfBytes = await pdfDoc.save();
-  return new Blob([pdfBytes], { type: 'application/pdf' });
+  try {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    
+    if (!result.value) {
+      throw new Error('Failed to extract content from DOCX file');
+    }
+
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage();
+    const { width, height } = page.getSize();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    
+    // Simple HTML to PDF conversion
+    const text = result.value.replace(/<[^>]*>/g, '\n').trim();
+    const fontSize = 12;
+    const margin = 50;
+    const lineHeight = fontSize * 1.2;
+    
+    const lines = [];
+    let currentLine = '';
+    const words = text.split(' ');
+    
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const lineWidth = font.widthOfTextAtSize(testLine, fontSize);
+      
+      if (lineWidth > width - 2 * margin) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    
+    lines.forEach((line, index) => {
+      const y = height - margin - (index * lineHeight);
+      if (y > margin) {
+        page.drawText(line, {
+          x: margin,
+          y,
+          size: fontSize,
+          font,
+          color: rgb(0, 0, 0),
+        });
+      }
+    });
+    
+    const pdfBytes = await pdfDoc.save();
+    return new Blob([pdfBytes], { type: 'application/pdf' });
+  } catch (error) {
+    throw new Error(`Failed to convert DOCX to PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 export async function convertPdfToDocx(file: File): Promise<Blob> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  
-  let text = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item: any) => item.str)
-      .join(' ');
-    text += pageText + '\n\n';
+  try {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const pages = pdfDoc.getPages();
+    
+    let text = '';
+    for (const page of pages) {
+      const content = await page.extractText();
+      text += content + '\n\n';
+    }
+    
+    // Create a simple HTML document
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <body>
+          ${text.split('\n').map(line => `<p>${line}</p>`).join('')}
+        </body>
+      </html>
+    `;
+    
+    // Convert HTML to DOCX format
+    const result = await mammoth.convertToBuffer({ value: html });
+    return new Blob([result], { 
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+  } catch (error) {
+    throw new Error(`Failed to convert PDF to DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-  
-  // Create a simple HTML document with the extracted text
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <body>
-        ${text.split('\n').map(line => `<p>${line}</p>`).join('')}
-      </body>
-    </html>
-  `;
-  
-  // Convert HTML to DOCX using mammoth (in reverse)
-  const docxBuffer = await mammoth.convertToHtml({ text: html });
-  return new Blob([docxBuffer.value], { 
-    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
-  });
 }
 
 export async function convertExcelToPdf(file: File): Promise<Blob> {
-  const arrayBuffer = await file.arrayBuffer();
-  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-  
-  const pdfDoc = await PDFDocument.create();
-  
-  for (const sheetName of workbook.SheetNames) {
-    const worksheet = workbook.Sheets[sheetName];
-    const page = pdfDoc.addPage();
-    const { width, height } = page.getSize();
+  try {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     
-    // Convert worksheet data to formatted text
-    const data = XLSX.utils.sheet_to_json(worksheet);
-    const formattedText = JSON.stringify(data, null, 2);
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     
-    // Draw text with proper formatting
-    page.drawText(formattedText, {
-      x: 50,
-      y: height - 50,
-      size: 10,
-      maxWidth: width - 100,
-    });
+    for (const sheetName of workbook.SheetNames) {
+      const worksheet = workbook.Sheets[sheetName];
+      const page = pdfDoc.addPage();
+      const { width, height } = page.getSize();
+      
+      // Convert worksheet to JSON
+      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      // Draw table
+      const margin = 50;
+      const fontSize = 10;
+      const lineHeight = fontSize * 1.5;
+      const cellPadding = 5;
+      const columnWidth = (width - 2 * margin) / (data[0]?.length || 1);
+      
+      data.forEach((row: any[], rowIndex) => {
+        const y = height - margin - (rowIndex * lineHeight);
+        if (y > margin) {
+          row.forEach((cell, colIndex) => {
+            const x = margin + (colIndex * columnWidth);
+            page.drawText(String(cell), {
+              x: x + cellPadding,
+              y,
+              size: fontSize,
+              font,
+              color: rgb(0, 0, 0),
+            });
+          });
+        }
+      });
+    }
+    
+    const pdfBytes = await pdfDoc.save();
+    return new Blob([pdfBytes], { type: 'application/pdf' });
+  } catch (error) {
+    throw new Error(`Failed to convert Excel to PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-  
-  const pdfBytes = await pdfDoc.save();
-  return new Blob([pdfBytes], { type: 'application/pdf' });
 }
 
 export async function convertPdfToExcel(file: File): Promise<Blob> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  
-  // Create a new workbook
-  const workbook = XLSX.utils.book_new();
-  
-  // Extract text from each page and add to worksheet
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item: any) => item.str)
-      .join(' ');
+  try {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const pages = pdfDoc.getPages();
     
-    // Convert text to worksheet data
-    const rows = pageText.split('\n').map(line => [line]);
-    const worksheet = XLSX.utils.aoa_to_sheet(rows);
-    XLSX.utils.book_append_sheet(workbook, worksheet, `Page ${i}`);
+    // Create a new workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // Process each page
+    for (let i = 0; i < pages.length; i++) {
+      const text = await pages[i].extractText();
+      
+      // Split text into rows (simple approach)
+      const rows = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => [line]); // Each line becomes a row with one cell
+      
+      // Create worksheet
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(workbook, worksheet, `Page ${i + 1}`);
+    }
+    
+    const excelBuffer = XLSX.write(workbook, { type: 'array' });
+    return new Blob([excelBuffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+  } catch (error) {
+    throw new Error(`Failed to convert PDF to Excel: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-  
-  const excelBuffer = XLSX.write(workbook, { type: 'array' });
-  return new Blob([excelBuffer], { 
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-  });
 }
