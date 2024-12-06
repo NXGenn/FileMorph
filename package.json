@@ -19,14 +19,12 @@
     "react-router-dom": "^6.22.3",
     "mammoth": "^1.6.0",
     "xlsx": "^0.18.5",
-    "@ffmpeg/ffmpeg": "^0.12.10",
-    "@ffmpeg/util": "^0.12.1",
+    "ffmpeg.js": "^4.2.9003",
     "js-yaml": "^4.1.0",
     "fast-xml-parser": "^4.3.4",
     "iconv-lite": "^0.6.3",
     "epub-gen": "^0.1.0",
-    "file-saver": "^2.0.5",
-    "pdfjs-dist": "^4.0.379"
+    "file-saver": "^2.0.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
