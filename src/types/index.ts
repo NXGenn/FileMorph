@@ -1,12 +1,19 @@
-export type ImageFormat = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+import { FileType } from '../utils/fileUtils';
 
-export interface FileWithPreview extends File {
-  preview: string;
+export interface ConversionJob {
+  id: string;
+  sourceFile: File;
+  targetFormat: FileType;
+  progress: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error?: string;
 }
 
-export interface ConversionOptions {
-  format: ImageFormat;
-  quality?: number;
+export interface FilePreview {
+  id: string;
+  url: string;
+  type: string;
+  name: string;
 }
 
-export type ConversionStatus = 'idle' | 'loading' | 'success' | 'error';
+export { FileType };
