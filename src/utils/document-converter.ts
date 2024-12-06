@@ -1,7 +1,6 @@
 import mammoth from 'mammoth';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
 
 async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
@@ -18,7 +17,7 @@ export async function convertDocxToPdf(file: File): Promise<Blob> {
     const result = await mammoth.convertToHtml({ arrayBuffer });
     
     if (!result.value) {
-      throw new Error('Failed to extract content from DOCX file');
+      throw new Error('Failed to extract content from Word document');
     }
 
     const pdfDoc = await PDFDocument.create();
@@ -26,15 +25,15 @@ export async function convertDocxToPdf(file: File): Promise<Blob> {
     const { width, height } = page.getSize();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     
-    // Simple HTML to PDF conversion
+    // Convert HTML to plain text and handle basic formatting
     const text = result.value.replace(/<[^>]*>/g, '\n').trim();
     const fontSize = 12;
     const margin = 50;
     const lineHeight = fontSize * 1.2;
     
-    const lines = [];
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
     let currentLine = '';
-    const words = text.split(' ');
     
     for (const word of words) {
       const testLine = currentLine ? `${currentLine} ${word}` : word;
@@ -51,23 +50,32 @@ export async function convertDocxToPdf(file: File): Promise<Blob> {
       lines.push(currentLine);
     }
     
-    lines.forEach((line, index) => {
-      const y = height - margin - (index * lineHeight);
-      if (y > margin) {
-        page.drawText(line, {
-          x: margin,
-          y,
-          size: fontSize,
-          font,
-          color: rgb(0, 0, 0),
-        });
+    // Create new pages as needed
+    let currentPage = page;
+    let y = height - margin;
+    
+    for (const line of lines) {
+      if (y < margin) {
+        currentPage = pdfDoc.addPage();
+        y = height - margin;
       }
-    });
+      
+      currentPage.drawText(line, {
+        x: margin,
+        y,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      
+      y -= lineHeight;
+    }
     
     const pdfBytes = await pdfDoc.save();
     return new Blob([pdfBytes], { type: 'application/pdf' });
   } catch (error) {
-    throw new Error(`Failed to convert DOCX to PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('DOCX to PDF conversion failed:', error);
+    throw new Error('Failed to convert Word document to PDF. Please ensure the file is not corrupted.');
   }
 }
 
@@ -83,7 +91,7 @@ export async function convertPdfToDocx(file: File): Promise<Blob> {
       text += content + '\n\n';
     }
     
-    // Create a simple HTML document
+    // Create a simple HTML document with basic formatting
     const html = `
       <!DOCTYPE html>
       <html>
@@ -93,13 +101,13 @@ export async function convertPdfToDocx(file: File): Promise<Blob> {
       </html>
     `;
     
-    // Convert HTML to DOCX format
     const result = await mammoth.convertToBuffer({ value: html });
     return new Blob([result], { 
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     });
   } catch (error) {
-    throw new Error(`Failed to convert PDF to DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('PDF to DOCX conversion failed:', error);
+    throw new Error('Failed to convert PDF to Word. Please ensure the PDF contains extractable text.');
   }
 }
 
@@ -116,37 +124,44 @@ export async function convertExcelToPdf(file: File): Promise<Blob> {
       const page = pdfDoc.addPage();
       const { width, height } = page.getSize();
       
-      // Convert worksheet to JSON
-      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
       
-      // Draw table
+      if (data.length === 0) continue;
+      
       const margin = 50;
       const fontSize = 10;
       const lineHeight = fontSize * 1.5;
       const cellPadding = 5;
-      const columnWidth = (width - 2 * margin) / (data[0]?.length || 1);
+      const columnWidth = (width - 2 * margin) / data[0].length;
       
-      data.forEach((row: any[], rowIndex) => {
-        const y = height - margin - (rowIndex * lineHeight);
-        if (y > margin) {
-          row.forEach((cell, colIndex) => {
-            const x = margin + (colIndex * columnWidth);
-            page.drawText(String(cell), {
-              x: x + cellPadding,
-              y,
-              size: fontSize,
-              font,
-              color: rgb(0, 0, 0),
-            });
-          });
+      let y = height - margin;
+      
+      for (const row of data) {
+        if (y < margin) {
+          page = pdfDoc.addPage();
+          y = height - margin;
         }
-      });
+        
+        row.forEach((cell, colIndex) => {
+          const x = margin + (colIndex * columnWidth);
+          page.drawText(String(cell ?? ''), {
+            x: x + cellPadding,
+            y,
+            size: fontSize,
+            font,
+            color: rgb(0, 0, 0),
+          });
+        });
+        
+        y -= lineHeight;
+      }
     }
     
     const pdfBytes = await pdfDoc.save();
     return new Blob([pdfBytes], { type: 'application/pdf' });
   } catch (error) {
-    throw new Error(`Failed to convert Excel to PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('Excel to PDF conversion failed:', error);
+    throw new Error('Failed to convert Excel file to PDF. Please ensure the file is not corrupted.');
   }
 }
 
@@ -156,20 +171,17 @@ export async function convertPdfToExcel(file: File): Promise<Blob> {
     const pdfDoc = await PDFDocument.load(arrayBuffer);
     const pages = pdfDoc.getPages();
     
-    // Create a new workbook
     const workbook = XLSX.utils.book_new();
     
-    // Process each page
     for (let i = 0; i < pages.length; i++) {
       const text = await pages[i].extractText();
       
-      // Split text into rows (simple approach)
+      // Split text into rows and columns (basic table detection)
       const rows = text.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0)
-        .map(line => [line]); // Each line becomes a row with one cell
+        .map(line => line.split(/\s{2,}/)); // Split by 2 or more spaces to detect columns
       
-      // Create worksheet
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
       XLSX.utils.book_append_sheet(workbook, worksheet, `Page ${i + 1}`);
     }
@@ -179,6 +191,7 @@ export async function convertPdfToExcel(file: File): Promise<Blob> {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     });
   } catch (error) {
-    throw new Error(`Failed to convert PDF to Excel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('PDF to Excel conversion failed:', error);
+    throw new Error('Failed to convert PDF to Excel. Please ensure the PDF contains properly formatted tabular data.');
   }
 }

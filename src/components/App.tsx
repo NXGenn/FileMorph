@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { FileWithPreview, ImageFormat, ConversionStatus } from '../types';
 import { DropZone } from './DropZone';
 import { ImagePreview } from './ImagePreview';
-import { FormatSelector } from './FormatSelector';
+import { ImageFormatSelector } from './ImageFormatSelector';
 import { Button } from './ui/Button';
 import { convertImage, getFileExtension, createDownloadLink } from '../utils/image-converter';
 import { createPDFFromImages } from '../utils/pdf-generator';
@@ -122,7 +122,12 @@ export const App: React.FC = () => {
         </p>
       </div>
 
-      <DropZone onFilesDrop={handleFilesDrop} />
+      <DropZone 
+        onFilesDrop={handleFilesDrop} 
+        acceptedFileTypes=".jpg,.jpeg,.png,.gif,.webp"
+        maxFileSize={50 * 1024 * 1024} // 50MB
+        maxFiles={20}
+      />
 
       {files.length > 0 && (
         <>
@@ -134,7 +139,7 @@ export const App: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Target Format
                 </label>
-                <FormatSelector
+                <ImageFormatSelector
                   value={targetFormat}
                   onChange={setTargetFormat}
                 />

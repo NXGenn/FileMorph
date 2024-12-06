@@ -95,6 +95,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
   };
 
   const getAcceptedTypesMessage = () => {
+    if (!acceptedFileTypes) return '';
     const types = acceptedFileTypes.split(',').map(type => 
       type.trim().replace('*', '').toUpperCase()
     );
