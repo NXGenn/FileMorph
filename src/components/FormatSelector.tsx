@@ -1,8 +1,15 @@
 import React from 'react';
-import { ConversionType } from '../types/conversion';
+import { Select } from './ui/Select';
+import { DOCUMENT_FORMATS } from '../utils/document-formats';
+import { 
+  VIDEO_FORMATS, 
+  AUDIO_FORMATS,
+  SUPPORTED_VIDEO_CONVERSIONS,
+  SUPPORTED_AUDIO_CONVERSIONS 
+} from '../types/conversion';
 
 interface FormatSelectorProps {
-  conversionType: ConversionType;
+  conversionType: 'document' | 'video' | 'audio';
   sourceFormat: string;
   targetFormat: string;
   onSourceFormatChange: (format: string) => void;
@@ -16,50 +23,92 @@ export const FormatSelector: React.FC<FormatSelectorProps> = ({
   onSourceFormatChange,
   onTargetFormatChange,
 }) => {
-  const getFormats = (type: ConversionType) => {
-    switch (type) {
-      case 'document':
-        return ['pdf', 'docx', 'xlsx', 'pptx', 'epub'];
-      case 'video':
-        return ['mp4', 'avi', 'mkv', 'mov'];
-      case 'audio':
-        return ['mp3', 'wav', 'aac', 'flac'];
-      case 'text':
-        return ['json', 'xml', 'yaml', 'txt'];
-      case 'image':
-        return ['jpeg', 'png', 'gif', 'webp'];
-      default:
-        return [];
+  const formats = 
+    conversionType === 'document' ? DOCUMENT_FORMATS : 
+    conversionType === 'audio' ? AUDIO_FORMATS :
+    VIDEO_FORMATS;
+
+  const supportedConversions = 
+    conversionType === 'document' 
+      ? Object.entries(formats).map(([key]) => key)
+      : conversionType === 'audio'
+      ? Object.keys(SUPPORTED_AUDIO_CONVERSIONS).map(key => {
+          const [source, target] = key.split('-');
+          return { source, target };
+        })
+      : Object.keys(SUPPORTED_VIDEO_CONVERSIONS).map(key => {
+          const [source, target] = key.split('-');
+          return { source, target };
+        });
+
+  const getTargetFormats = (source: string) => {
+    if (conversionType === 'document') {
+      return Object.entries(formats)
+        .filter(([key]) => key !== source)
+        .map(([key, value]) => ({
+          value: key,
+          label: value.label
+        }));
+    } else {
+      const conversions = Array.isArray(supportedConversions) 
+        ? supportedConversions 
+        : Object.keys(supportedConversions).map(key => {
+            const [s, t] = key.split('-');
+            return { source: s, target: t };
+          });
+
+      return conversions
+        .filter(conv => conv.source === source)
+        .map(conv => ({
+          value: conv.target,
+          label: formats[conv.target as keyof typeof formats].label
+        }));
     }
   };
 
-  const formats = getFormats(conversionType);
+  const sourceFormats = Object.entries(formats).map(([key, value]) => ({
+    value: key,
+    label: value.label
+  }));
+
+  const targetFormats = getTargetFormats(sourceFormat);
 
   return (
-    <div className="flex items-center space-x-4">
-      <select
-        value={sourceFormat}
-        onChange={(e) => onSourceFormatChange(e.target.value)}
-        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-      >
-        {formats.map((format) => (
-          <option key={format} value={format}>
-            {format.toUpperCase()}
-          </option>
-        ))}
-      </select>
-      <span className="text-gray-500">to</span>
-      <select
-        value={targetFormat}
-        onChange={(e) => onTargetFormatChange(e.target.value)}
-        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-      >
-        {formats.map((format) => (
-          <option key={format} value={format}>
-            {format.toUpperCase()}
-          </option>
-        ))}
-      </select>
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Source Format
+        </label>
+        <Select
+          value={sourceFormat}
+          onChange={(e) => {
+            const newSource = e.target.value;
+            onSourceFormatChange(newSource);
+            // Reset target format if not available for new source
+            const validTargets = getTargetFormats(newSource);
+            if (!validTargets.find(t => t.value === targetFormat)) {
+              onTargetFormatChange(validTargets[0]?.value || '');
+            }
+          }}
+          options={sourceFormats}
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Target Format
+        </label>
+        <Select
+          value={targetFormat}
+          onChange={(e) => onTargetFormatChange(e.target.value)}
+          options={targetFormats}
+          disabled={targetFormats.length === 0}
+        />
+        {targetFormats.length === 0 && (
+          <p className="mt-1 text-sm text-red-500">
+            No supported target formats for this source format
+          </p>
+        )}
+      </div>
     </div>
   );
 };

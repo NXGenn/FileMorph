@@ -1,101 +1,116 @@
-import React, { useState, useCallback } from 'react';
-import { DropZone } from '../components/DropZone';
-import { FormatSelector } from '../components/FormatSelector';
-import { Button } from '../components/ui/Button';
-import { Music } from 'lucide-react';
-import { convertAudio } from '../utils/media-converter';
-import { AudioFormat } from '../types/conversion';
-import { FileWithPreview } from '../types';
-import { saveAs } from 'file-saver';
+import React, { useState } from 'react';
+import { Download } from 'lucide-react';
+import { DropZoneAudio } from '../components/DropZoneAudio.tsx';
+import { FormatSelectorAudio } from '../components/FormatSelectorAudio.tsx';
+import { ProgressBar } from '../components/ProgressBar.tsx';
+import { FileInfo } from '../components/FileInfo.tsx';
+import { convertAudio } from '../utils/audioConverter.ts';
+import { AudioFile, AudioFormat, ConversionProgress } from '../types/audio.ts';
 
-export const AudioConverter: React.FC = () => {
-  const [files, setFiles] = useState<FileWithPreview[]>([]);
-  const [sourceFormat, setSourceFormat] = useState<AudioFormat>('mp3');
-  const [targetFormat, setTargetFormat] = useState<AudioFormat>('wav');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+export const AudioConverter: React.FC = () =>  {
+  const [audioFile, setAudioFile] = useState<AudioFile | null>(null);
+  const [targetFormat, setTargetFormat] = useState<AudioFormat>('mp3');
+  const [converting, setConverting] = useState(false);
+  const [progress, setProgress] = useState<ConversionProgress>({ percentage: 0, timeRemaining: 0 });
+  const [convertedBlob, setConvertedBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFilesDrop = useCallback((newFiles: FileWithPreview[]) => {
-    setFiles(newFiles);
-    setError(null);
-  }, []);
+  const handleConversion = async () => {
+    if (!audioFile) return;
 
-  const handleConvert = async () => {
-    if (files.length === 0) {
-      setError('Please select at least one audio file');
-      return;
-    }
-
-    setStatus('loading');
+    setConverting(true);
     setError(null);
+    setConvertedBlob(null);
 
     try {
-      const file = files[0];
-      const result = await convertAudio(file, targetFormat);
-      saveAs(result, `converted.${targetFormat}`);
-      setStatus('success');
+      const converted = await convertAudio(
+          audioFile.file,
+          targetFormat,
+          (percentage, timeRemaining) => setProgress({ percentage, timeRemaining })
+      );
+      setConvertedBlob(converted);
     } catch (err) {
-      console.error('Conversion failed:', err);
-      setError(err instanceof Error ? err.message : 'Conversion failed');
-      setStatus('error');
+      setError('An error occurred during conversion. Please try again.');
+    } finally {
+      setConverting(false);
     }
   };
 
+  const handleDownload = () => {
+    if (!convertedBlob || !audioFile) return;
+
+    const url = URL.createObjectURL(convertedBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${audioFile.name.split('.')[0]}.${targetFormat}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Audio Converter</h1>
-        <p className="mt-2 text-gray-600">
-          Convert between different audio formats
-        </p>
-      </div>
+      <div className="min-h-screen bg-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
+            <h1 className="text-2xl font-bold text-gray-900 text-center">
+              Audio File Converter
+            </h1>
 
-      <div className="space-y-6">
-        <DropZone 
-          onFilesDrop={handleFilesDrop}
-          acceptedFileTypes=".mp3,.wav,.aac,.flac,.ogg,.m4a"
-          maxFileSize={200 * 1024 * 1024} // 200MB
-          maxFiles={1}
-        />
+            {!audioFile ? (
+                <DropZoneAudio onFileAccepted={setAudioFile} />
+            ) : (
+                <FileInfo file={audioFile} onRemove={() => setAudioFile(null)} />
+            )}
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h2 className="text-lg font-semibold mb-4">Conversion Settings</h2>
-          <FormatSelector
-            conversionType="audio"
-            sourceFormat={sourceFormat}
-            targetFormat={targetFormat}
-            onSourceFormatChange={(format) => setSourceFormat(format as AudioFormat)}
-            onTargetFormatChange={(format) => setTargetFormat(format as AudioFormat)}
-          />
+            {audioFile && (
+                <div className="space-y-4">
+                  <FormatSelectorAudio
+                      selectedFormat={targetFormat}
+                      onFormatChange={setTargetFormat}
+                      disabled={converting}
+                  />
+
+                  {!convertedBlob && !converting && (
+                      <button
+                          onClick={handleConversion}
+                          className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700
+                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                           transition-colors"
+                      >
+                        Convert to {targetFormat.toUpperCase()}
+                      </button>
+                  )}
+
+                  {converting && (
+                      <ProgressBar
+                          progress={progress.percentage}
+                          timeRemaining={progress.timeRemaining}
+                      />
+                  )}
+
+                  {convertedBlob && (
+                      <button
+                          onClick={handleDownload}
+                          className="w-full py-2 px-4 bg-green-600 text-white rounded-md
+                           hover:bg-green-700 focus:outline-none focus:ring-2
+                           focus:ring-green-500 focus:ring-offset-2 transition-colors
+                           flex items-center justify-center space-x-2"
+                      >
+                        <Download className="h-5 w-5" />
+                        <span>Download Converted File</span>
+                      </button>
+                  )}
+
+                  {error && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                        <p className="text-sm text-red-600">{error}</p>
+                      </div>
+                  )}
+                </div>
+            )}
+          </div>
         </div>
-
-        {files.length > 0 && (
-          <div className="flex justify-center">
-            <Button
-              onClick={handleConvert}
-              isLoading={status === 'loading'}
-              className="w-full max-w-md"
-            >
-              <Music className="w-4 h-4 mr-2" />
-              Convert Audio
-            </Button>
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        )}
-
-        {status === 'success' && (
-          <div className="rounded-md bg-green-50 p-4">
-            <p className="text-sm text-green-700">
-              Audio converted successfully!
-            </p>
-          </div>
-        )}
       </div>
-    </div>
   );
-};
+}

@@ -1,124 +1,213 @@
-import React, { useState, useCallback } from 'react';
-import { DropZone } from '../components/DropZone';
+import React, { useState, useEffect } from 'react';
+import { FileUploader } from '../components/FileUploader';
 import { FormatSelector } from '../components/FormatSelector';
-import { Button } from '../components/ui/Button';
-import { Video } from 'lucide-react';
 import { convertVideo, extractAudioFromVideo } from '../utils/media-converter';
 import { VideoFormat } from '../types/conversion';
-import { FileWithPreview } from '../types';
-import { saveAs } from 'file-saver';
+import { Progress } from '../components/ui/Progress';
+
+// Maximum file size: 500MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024;
+const SUPPORTED_FORMATS = ['mp4', 'avi', 'mkv', 'mov', 'webm'];
+
+interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+}
+
+const validateVideoFile = (file: File): ValidationResult => {
+  if (!file) {
+    return { isValid: false, error: 'Please select a file' };
+  }
+
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      isValid: false,
+      error: `File size must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+    };
+  }
+
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  if (!SUPPORTED_FORMATS.includes(extension)) {
+    return {
+      isValid: false,
+      error: `Unsupported file format. Supported formats: ${SUPPORTED_FORMATS.join(', ')}`
+    };
+  }
+
+  const validMimeTypes = [
+    'video/mp4',
+    'video/x-msvideo',
+    'video/x-matroska',
+    'video/quicktime',
+    'video/webm'
+  ];
+  
+  if (!validMimeTypes.includes(file.type)) {
+    return {
+      isValid: false,
+      error: 'Invalid video file type'
+    };
+  }
+
+  return { isValid: true };
+};
 
 export const VideoConverter: React.FC = () => {
-  const [files, setFiles] = useState<FileWithPreview[]>([]);
-  const [sourceFormat, setSourceFormat] = useState<VideoFormat>('mp4');
-  const [targetFormat, setTargetFormat] = useState<VideoFormat>('avi');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [file, setFile] = useState<File | null>(null);
+  const [sourceFormat, setSourceFormat] = useState<string>('mp4');
+  const [targetFormat, setTargetFormat] = useState<string>('avi');
+  const [isConverting, setIsConverting] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [extractAudio, setExtractAudio] = useState(false);
+  const [isValidFile, setIsValidFile] = useState(false);
 
-  const handleFilesDrop = useCallback((newFiles: FileWithPreview[]) => {
-    setFiles(newFiles);
-    setError(null);
-  }, []);
+  useEffect(() => {
+    if (file) {
+      const validation = validateVideoFile(file);
+      setIsValidFile(validation.isValid);
+      setError(validation.error || null);
+
+      if (validation.isValid) {
+        const extension = file.name.split('.').pop()?.toLowerCase() || '';
+        if (SUPPORTED_FORMATS.includes(extension)) {
+          setSourceFormat(extension);
+        }
+      }
+    } else {
+      setIsValidFile(false);
+      setError(null);
+    }
+  }, [file]);
+
+  const handleFileChange = (newFile: File | null) => {
+    setFile(newFile);
+    setProgress(0);
+  };
 
   const handleConvert = async () => {
-    if (files.length === 0) {
-      setError('Please select at least one video file');
+    if (!file || !isValidFile) {
+      setError('Please select a valid video file');
       return;
     }
 
-    setStatus('loading');
+    setIsConverting(true);
     setError(null);
+    setProgress(0);
 
     try {
-      const file = files[0];
-      let result: Blob;
+      // Faster progress updates
+      const progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 85) {
+            return prev;
+          }
+          // Faster increments
+          return prev + Math.floor(Math.random() * 15 + 5);
+        });
+      }, 300); // Shorter interval
 
-      if (extractAudio) {
+      let result: Blob;
+      if (targetFormat === 'mp3') {
         result = await extractAudioFromVideo(file);
-        saveAs(result, 'extracted-audio.mp3');
       } else {
-        result = await convertVideo(file, targetFormat);
-        saveAs(result, `converted.${targetFormat}`);
+        result = await convertVideo(file, targetFormat as VideoFormat);
       }
 
-      setStatus('success');
+      clearInterval(progressInterval);
+      setProgress(100);
+
+      // Create and trigger download
+      const url = URL.createObjectURL(result);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `converted_${file.name.split('.')[0]}.${targetFormat}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Reset after successful conversion
+      setTimeout(() => {
+        setProgress(0);
+        setIsConverting(false);
+      }, 1500);
     } catch (err) {
-      console.error('Conversion failed:', err);
+      console.error('Conversion error:', err);
       setError(err instanceof Error ? err.message : 'Conversion failed');
-      setStatus('error');
+      setProgress(0);
+      setIsConverting(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Video Converter</h1>
-        <p className="mt-2 text-gray-600">
-          Convert videos between formats or extract audio
-        </p>
-      </div>
-
-      <div className="space-y-6">
-        <DropZone 
-          onFilesDrop={handleFilesDrop}
-          acceptedFileTypes=".mp4,.avi,.mkv,.mov,.webm"
-          maxFileSize={500 * 1024 * 1024} // 500MB
-          maxFiles={1}
-        />
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h2 className="text-lg font-semibold mb-4">Conversion Settings</h2>
-          
-          <div className="space-y-4">
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={extractAudio}
-                onChange={(e) => setExtractAudio(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span>Extract audio (MP3)</span>
-            </label>
-
-            {!extractAudio && (
-              <FormatSelector
-                conversionType="video"
-                sourceFormat={sourceFormat}
-                targetFormat={targetFormat}
-                onSourceFormatChange={(format) => setSourceFormat(format as VideoFormat)}
-                onTargetFormatChange={(format) => setTargetFormat(format as VideoFormat)}
-              />
-            )}
+    <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Video Converter
+          </h2>
+          <p className="text-gray-600">
+            Convert your videos to different formats or extract audio
+          </p>
+          <div className="mt-2 text-sm text-gray-500">
+            Supported formats: {SUPPORTED_FORMATS.join(', ')}
+            <br />
+            Maximum file size: {MAX_FILE_SIZE / (1024 * 1024)}MB
           </div>
         </div>
 
-        {files.length > 0 && (
-          <div className="flex justify-center">
-            <Button
-              onClick={handleConvert}
-              isLoading={status === 'loading'}
-              className="w-full max-w-md"
-            >
-              <Video className="w-4 h-4 mr-2" />
-              {extractAudio ? 'Extract Audio' : 'Convert Video'}
-            </Button>
-          </div>
-        )}
+        <FileUploader 
+          onFileChange={handleFileChange}
+          accept="video/mp4,video/x-msvideo,video/x-matroska,video/quicktime,video/webm"
+          maxSize={MAX_FILE_SIZE}
+          fileType="video"
+        />
 
-        {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        )}
-
-        {status === 'success' && (
-          <div className="rounded-md bg-green-50 p-4">
-            <p className="text-sm text-green-700">
-              {extractAudio ? 'Audio extracted successfully!' : 'Video converted successfully!'}
+        {file && isValidFile && (
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600">Selected file:</p>
+            <p className="font-medium text-gray-900">{file.name}</p>
+            <p className="text-sm text-gray-500">
+              Size: {(file.size / (1024 * 1024)).toFixed(2)} MB
+            </p>
+            <p className="text-sm text-gray-500">
+              Type: {file.type}
             </p>
           </div>
         )}
+
+        {isValidFile && (
+          <FormatSelector
+            conversionType="video"
+            sourceFormat={sourceFormat}
+            targetFormat={targetFormat}
+            onSourceFormatChange={setSourceFormat}
+            onTargetFormatChange={setTargetFormat}
+          />
+        )}
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+            <span className="block sm:inline">{error}</span>
+          </div>
+        )}
+
+        {isConverting && (
+          <div className="space-y-2">
+            <Progress value={progress} />
+            <p className="text-sm text-gray-600 text-center">
+              {progress === 100 ? 'Conversion complete!' : `Converting... ${progress}%`}
+            </p>
+          </div>
+        )}
+
+        <button
+          onClick={handleConvert}
+          disabled={!isValidFile || isConverting || !file}
+          className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isConverting ? 'Converting...' : 'Convert'}
+        </button>
       </div>
     </div>
   );
