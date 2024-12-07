@@ -51,22 +51,6 @@ FileMorph is a versatile and user-friendly file converter that supports a wide r
 
 ---
 
-### Advanced Features
-- **Optical Character Recognition (OCR)**
-    - Convert scanned images or PDFs into editable text files
-
-- **File Encryption and Security**
-    - Add password protection for sensitive PDFs
-    - Secure deletion of temporary files post-conversion
-
-- **Language Support**
-    - Multilingual interface and text recognition
-
-- **API Support**
-    - API integration for developers to use FileMorph in their own apps
-
----
-
 ### Design and Usability
 - **Dark Mode** for user comfort
 - Mobile-friendly interface for on-the-go use
@@ -84,7 +68,7 @@ FileMorph is a versatile and user-friendly file converter that supports a wide r
 ### Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/FileMorph.git
+   git clone https://github.com/NXGenn/FileMorph.git
 
 
 2. Navigate to the directory:

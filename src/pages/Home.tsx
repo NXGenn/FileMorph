@@ -72,7 +72,7 @@ export const Home: React.FC = () => {
                   <Wand2 className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Link to="/converter">
+              <Link to="/features">
                 <Button size="lg" variant="secondary" className="bg-blue-500 text-white hover:bg-blue-400">
                   Start Converting
                   <ArrowRight className="ml-2 w-5 h-5" />
