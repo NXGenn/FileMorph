@@ -1,6 +1,13 @@
 import mammoth from 'mammoth';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as XLSX from 'xlsx';
+import * as pdfjsLib from 'pdfjs-dist';
+import { TextItem } from 'pdfjs-dist/types/src/display/api';
+import { configurePdfWorker } from './pdf-config';
+import { Document, Paragraph, TextRun, Packer, ISectionOptions } from 'docx';
+
+// Configure PDF.js worker
+configurePdfWorker();
 
 async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
@@ -21,7 +28,7 @@ export async function convertDocxToPdf(file: File): Promise<Blob> {
     }
 
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage();
+    let page = pdfDoc.addPage();
     const { width, height } = page.getSize();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     
@@ -81,33 +88,120 @@ export async function convertDocxToPdf(file: File): Promise<Blob> {
 
 export async function convertPdfToDocx(file: File): Promise<Blob> {
   try {
+    console.log('Starting PDF to DOCX conversion...');
     const arrayBuffer = await readFileAsArrayBuffer(file);
-    const pdfDoc = await PDFDocument.load(arrayBuffer);
-    const pages = pdfDoc.getPages();
+    console.log('File loaded as ArrayBuffer');
     
-    let text = '';
-    for (const page of pages) {
-      const content = await page.extractText();
-      text += content + '\n\n';
+    // Ensure worker is configured
+    configurePdfWorker();
+    
+    // Load the PDF using pdf.js
+    console.log('Loading PDF document...');
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      verbosity: 0  // Reduce console noise
+    });
+    const pdf = await loadingTask.promise;
+    console.log(`PDF loaded successfully. Number of pages: ${pdf.numPages}`);
+    
+    // Prepare sections for the Word document
+    const sections: ISectionOptions[] = [];
+    
+    // Extract text from each page with better formatting
+    for (let i = 1; i <= pdf.numPages; i++) {
+      console.log(`Processing page ${i}...`);
+      let page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      
+      if (!content.items || content.items.length === 0) {
+        console.warn(`No text content found on page ${i}`);
+        continue;
+      }
+      
+      // Process text items with position information
+      const paragraphs: Paragraph[] = [];
+      let currentParagraph: string[] = [];
+      let lastY = 0;
+      
+      content.items.forEach((item: TextItem, index: number) => {
+        const y = Math.round(item.transform[5]);
+        const text = item.str.trim();
+        
+        if (text === '') return;
+        
+        if (index === 0) {
+          lastY = y;
+          currentParagraph.push(text);
+        } else {
+          const yDiff = Math.abs(y - lastY);
+          if (yDiff > 12) {
+            // New paragraph
+            if (currentParagraph.length > 0) {
+              paragraphs.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: currentParagraph.join(' '),
+                      size: 24 // 12pt font
+                    })
+                  ]
+                })
+              );
+              currentParagraph = [];
+            }
+            currentParagraph.push(text);
+          } else {
+            currentParagraph.push(text);
+          }
+          lastY = y;
+        }
+      });
+      
+      // Add the last paragraph if any
+      if (currentParagraph.length > 0) {
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: currentParagraph.join(' '),
+                size: 24
+              })
+            ]
+          })
+        );
+      }
+      
+      // Add page content as a section
+      sections.push({
+        properties: {},
+        children: paragraphs
+      });
+      
+      console.log(`Page ${i} processed successfully`);
     }
     
-    // Create a simple HTML document with basic formatting
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <body>
-          ${text.split('\n').map(line => `<p>${line}</p>`).join('')}
-        </body>
-      </html>
-    `;
-    
-    const result = await mammoth.convertToBuffer({ value: html });
-    return new Blob([result], { 
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    // Create the Word document with all sections
+    const doc = new Document({
+      sections: sections
     });
+    
+    console.log('Creating DOCX document...');
+    // Use browser-compatible blob creation
+    const blob = await Packer.toBlob(doc);
+    
+    console.log('Conversion completed successfully');
+    return blob;
   } catch (error) {
     console.error('PDF to DOCX conversion failed:', error);
-    throw new Error('Failed to convert PDF to Word. Please ensure the PDF contains extractable text.');
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    throw new Error(
+      error instanceof Error && error.message
+        ? `Failed to convert PDF to Word: ${error.message}`
+        : 'Failed to convert PDF to Word. Please ensure the PDF contains extractable text and try again.'
+    );
   }
 }
 
@@ -121,7 +215,7 @@ export async function convertExcelToPdf(file: File): Promise<Blob> {
     
     for (const sheetName of workbook.SheetNames) {
       const worksheet = workbook.Sheets[sheetName];
-      const page = pdfDoc.addPage();
+      let page = pdfDoc.addPage();
       const { width, height } = page.getSize();
       
       const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
