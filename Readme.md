@@ -107,4 +107,4 @@ Kumar Abhinaw
 
 📫 Support
 
-For support or inquiries, please email your_email@example.com.
+For support or inquiries, please email kabhinaw760@gmail.com
