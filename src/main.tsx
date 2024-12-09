@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { Features } from './pages/Features';
@@ -15,6 +15,7 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <Layout />,
+    errorElement: <Navigate to="/" />,
     children: [
       {
         path: '/',
@@ -44,6 +45,10 @@ const router = createBrowserRouter([
         path: '/converter/text',
         element: <TextConverter />,
       },
+      {
+        path: '*',
+        element: <Navigate to="/" replace />
+      }
     ],
   },
 ]);

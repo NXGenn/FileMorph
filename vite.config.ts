@@ -4,6 +4,20 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    port: 5173,
+    strictPort: true,
+    middleware: [
+      (req, res, next) => {
+        if (req.url.includes('.') || req.url.startsWith('/api')) {
+          next();
+        } else {
+          req.url = '/index.html';
+          next();
+        }
+      }
+    ]
+  },
   build: {
     rollupOptions: {
       input: {
