@@ -203,6 +203,7 @@ export const Features: React.FC = () => {
                         <Button
                             variant="secondary"
                             className="w-full justify-center group-hover:bg-gray-100"
+                            disabled={feature.comingSoon}
                         >
                           {feature.comingSoon ? 'Coming Soon' : 'Start Converting'}
                           {!feature.comingSoon && <ArrowRight className="ml-2 w-4 h-4" />}
@@ -214,7 +215,7 @@ export const Features: React.FC = () => {
             })}
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-16">
+          <div className="bg-white rounded-2xl shadow-md border border-gray-300 p-8 mb-16">
             <h2 className="text-2xl font-bold text-center text-gray-900 mb-12">
               Why Choose FileMorph?
             </h2>
@@ -238,15 +239,6 @@ export const Features: React.FC = () => {
                 );
               })}
             </div>
-          </div>
-
-          <div className="text-center">
-            <Link to="/converter">
-              <Button size="lg" className="bg-blue-600 text-white hover:bg-blue-700">
-                Start Converting Now
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
           </div>
         </div>
       </div>
